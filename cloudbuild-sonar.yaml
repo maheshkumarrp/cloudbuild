@@ -1,0 +1,61 @@
+steps:
+- name: 'gcr.io/cloud-builders/gsutil'
+  args:
+  - '-m'
+  - 'rsync'
+  - '-r'
+  - 'gs://${_BUCKET}/cache/.m2'
+  - '/cache/.m2'
+  volumes:
+  - path: '/cache/.m2'
+    name: 'm2_cache'
+    
+- name: 'gcr.io/cloud-builders/git'
+  args: ['clone', 'https://source.developers.google.com/p/${_PROJECT}/r/${_MICROSERVICE_REPO}', '--branch', '${_DEV_BRANCH}']
+
+- name: 'gcr.io/cloud-builders/mvn'
+  args: ['clean', 'install','test','surefire-report:report', '-f','./${_MICROSERVICE_REPO}/pom.xml','-q']
+  volumes:
+  - path: '/cache/.m2'
+    name: 'm2_cache'
+  env:
+  - MAVEN_OPTS=-Dmaven.repo.local=/cache/.m2
+
+#Sonar
+- name: 'gcr.io/cloud-builders/mvn'
+  args:
+  - 'sonar:sonar'
+  - '-Dsonar.projectKey=cloudbuild-bitbucket'
+  - '-Dsonar.host.url=https://sonarcloud.io'
+  - '-Dsonar.login=e09c4c1508afe601c495b6df4472dc3372d39ccd'
+  - '-Dsonar.language=java'
+  - '-Dsonar.dynamicAnalysis=reuseReports'
+  - '-Dsonar.core.codeCoveragePlugin=jacoco'
+  - '-Dsonar.java.coveragePlugin=jacoco'
+  - '-Dsonar.junit.reportsPath=target/surefire-reports'
+  - '-Dsonar.sources=src/main'
+  - '-Dsonar.tests=src/test'
+  - '-Dsonar.binaries=target/classes'
+  - '-Dsonar.java.binaries=target/classes'
+  - '-Dsonar.sourceEncoding=UTF-8'
+  - '-Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml'  
+  - '-f'
+  - './${_MICROSERVICE_REPO}/pom.xml'
+  volumes:
+  - path: '/cache/.m2'
+    name: 'm2_cache'
+  env:
+  - MAVEN_OPTS=-Dmaven.repo.local=/cache/.m2
+  
+substitutions:
+    #GCP Specific configuration. Please DON'T change anything
+    _PROJECT: tretail-dev-marketplace
+    _BUCKET: tretail-dev-marketplace-cloudbuild
+    
+    #Microservice Specific configuration. DevOps can change this settings    
+    _MICROSERVICE_REPO: springboot-app-OrderSearchService 
+    _DEV_BRANCH: dev
+    
+options:
+    substitution_option: 'ALLOW_LOOSE'
+
